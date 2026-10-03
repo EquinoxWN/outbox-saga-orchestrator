@@ -1,0 +1,9 @@
+spring:
+  application:
+    name: payment-service
+  flyway:
+    locations: classpath:db/outbox,classpath:db/migration
+server:
+  port: 8082
+payment:
+  limit-cents: 100000

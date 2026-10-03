@@ -1,0 +1,7 @@
+spring:
+  application:
+    name: inventory-service
+  flyway:
+    locations: classpath:db/outbox,classpath:db/migration
+server:
+  port: 8083
