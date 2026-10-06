@@ -3,7 +3,7 @@
 [![ci](https://github.com/EquinoxWN/outbox-saga-orchestrator/actions/workflows/ci.yml/badge.svg)](https://github.com/EquinoxWN/outbox-saga-orchestrator/actions/workflows/ci.yml)
 ![status](https://img.shields.io/badge/status-M1%20done%2C%20M2%20in%20progress-yellow)
 
-> Keeps an order, its payment and its stock consistent across services, and undoes them cleanly when one step fails.
+> Keeps an order, its payment and its stock consistent across services, step one: each service owns its database, and a transactional outbox makes an event exist only if its change committed.
 
 Part of my **Backend and API** list · Java (Spring Boot) · core project
 
@@ -47,11 +47,11 @@ _Steps 1 and 2 are built and tested (M1); the rest is on the [roadmap](#roadmap)
 
 ## Tech stack
 
-| Area | Tools |
-|---|---|
-| Core | Java (Spring Boot), PostgreSQL per service, Kafka |
-| Relay | Debezium outbox event router |
-| Test/UI | embedded PostgreSQL (M1), Testcontainers and Toxiproxy fault injection (M2-M3), saga timeline UI |
+| Area | In M1 | Planned |
+|---|---|---|
+| Core | Java 21, Spring Boot 4.1, PostgreSQL per service, Flyway | Saga orchestrator with compensations |
+| Relay | Transactional outbox table | Kafka, Debezium outbox event router |
+| Test / UI | Embedded PostgreSQL 18 | Testcontainers, Toxiproxy fault injection, saga timeline UI |
 
 Language: **Java 21 (Spring Boot 4.1)**, one Maven module per service plus a shared outbox writer.
 
@@ -151,7 +151,7 @@ What this repo must show before it counts as done:
 ## Why it matters
 
 - **Interview angle:** 'Keep data consistent across microservices'.
-- **Upstream I'm contributing to:** Apache Seata (from Alibaba) or Debezium.
+- **Upstream I'd like to contribute to:** Apache Seata (from Alibaba) or Debezium.
 
 ## Design docs
 
