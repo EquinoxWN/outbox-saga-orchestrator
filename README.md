@@ -7,6 +7,12 @@
 
 Part of my **Backend and API** list · Java (Spring Boot) · core project
 
+## Proof it works
+
+22 tests across the three services against a real PostgreSQL 18 started from embedded binaries: the outbox row commits with the business row or not at all, duplicate messages are applied once, stock is never oversold, and each service can only reach its own database. Every resolved Maven dependency was checked against OSV.dev, with none vulnerable after this check's upgrade:
+
+![mvn verify summary and the OSV dependency check](docs/proof/tests.jpg)
+
 ## Architecture
 
 **What M1 runs today:**
