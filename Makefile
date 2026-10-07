@@ -1,3 +1,6 @@
+# OSV-Scanner (https://google.github.io/osv-scanner/) checks every resolved Maven dependency.
+OSV ?= osv-scanner
+
 .PHONY: setup lint test run-order bench audit ci
 
 setup:
@@ -13,8 +16,9 @@ test:
 bench:
 	@echo "M3: fault-injection matrix (Toxiproxy) showing every failure ends in a consistent state"
 
-# Java dependencies are watched by Dependabot security alerts (see .github/dependabot.yml).
+# Known vulnerabilities in every resolved Maven dependency, test scope included.
 audit:
-	@echo "Java dependencies: Dependabot alerts and weekly update PRs; no extra local scanner in M1"
+	mvn -B -q org.cyclonedx:cyclonedx-maven-plugin:2.9.3:makeAggregateBom -DoutputFormat=json -DoutputName=bom -DincludeTestScope=true
+	$(OSV) scan source -L target/bom.json
 
 ci: setup lint test
