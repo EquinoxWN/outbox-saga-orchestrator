@@ -45,6 +45,12 @@ _Steps 1 and 2 are built and tested (M1); the rest is on the [roadmap](#roadmap)
 5. Consumers de-duplicate by event ID, and Toxiproxy injects network faults to prove recovery.
 6. A timeline UI shows every saga's steps, and stuck sagas raise alerts.
 
+## Who it helps
+
+- **Who:** Backend engineers splitting a system into services that each own a database.
+- **The problem:** Writing to the database and publishing an event separately loses events, or announces changes that were rolled back.
+- **How to use it:** Use the transactional outbox: the event row is written in the same transaction as the change, so it exists only if the change committed.
+
 ## Tech stack
 
 | Area | In M1 | Planned |
