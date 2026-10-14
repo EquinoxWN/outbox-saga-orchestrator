@@ -173,8 +173,8 @@ This is a learning and portfolio system, not a hosted production service. Everyt
 ## Security and contributing
 
 - Every GitHub Action is pinned to a commit SHA; workflows run read-only, without persisted credentials.
-- Dependabot proposes dependency and action updates weekly.
-- Every request body is validated; each service has its own database and least-privilege login role; queries are parameterised; CI scans a CycloneDX SBOM of every resolved Maven dependency with OSV-Scanner (`make audit`), and Dependabot proposes updates weekly.
+- Dependabot update pull requests are paused (`open-pull-requests-limit: 0`) so the repository keeps a single `main` branch; dependencies are updated by hand and checked by the CI audit.
+- Every request body is validated; each service has its own database and least-privilege login role; queries are parameterised; CI scans a CycloneDX SBOM of every resolved Maven dependency with OSV-Scanner (`make audit`), and Dependabot update pull requests are paused (`open-pull-requests-limit: 0`) so the repository keeps a single `main` branch; dependencies are updated by hand and checked by the CI audit.
 - Report vulnerabilities privately: see [SECURITY.md](SECURITY.md). To contribute, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
