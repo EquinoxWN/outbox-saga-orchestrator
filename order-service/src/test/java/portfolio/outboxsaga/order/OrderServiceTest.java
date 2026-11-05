@@ -27,6 +27,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.IllegalTransactionStateException;
+import org.springframework.transaction.support.AbstractPlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import portfolio.outboxsaga.outbox.OutboxWriter;
 import portfolio.outboxsaga.testsupport.EmbeddedDatabases;
@@ -46,16 +47,24 @@ class OrderServiceTest {
     @Autowired OrderService orders;
     @Autowired OutboxWriter outbox;
     @Autowired TransactionTemplate tx;
+    @Autowired AbstractPlatformTransactionManager txManager;
 
     private final HttpClient http = HttpClient.newHttpClient();
 
     /** POSTs a JSON body to this service. */
     private HttpResponse<String> post(String path, String json) throws Exception {
-        HttpRequest req = HttpRequest.newBuilder(URI.create("http://localhost:" + env.getProperty("local.server.port") + path))
+        return post(path, json, null);
+    }
+
+    /** POSTs a JSON body with an optional Idempotency-Key header. */
+    private HttpResponse<String> post(String path, String json, String key) throws Exception {
+        HttpRequest.Builder req = HttpRequest.newBuilder(URI.create("http://localhost:" + env.getProperty("local.server.port") + path))
                 .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(json))
-                .build();
-        return http.send(req, HttpResponse.BodyHandlers.ofString());
+                .POST(HttpRequest.BodyPublishers.ofString(json));
+        if (key != null) {
+            req.header("Idempotency-Key", key);
+        }
+        return http.send(req.build(), HttpResponse.BodyHandlers.ofString());
     }
 
     /** GETs a path from this service. */
@@ -174,6 +183,62 @@ class OrderServiceTest {
         }
         assertEquals(50, count("orders"));
         assertEquals(50, jdbc.sql("SELECT count(DISTINCT aggregateid) FROM outbox").query(Long.class).single());
+    }
+
+    private static final String BODY = "{\"customerId\":\"c-1\",\"sku\":\"SKU-1\",\"quantity\":2,\"amountCents\":1999}";
+
+    @Test
+    void aRetriedPostWithTheSameKeyReturnsTheFirstOrderAndNoSecondEvent() throws Exception {
+        HttpResponse<String> first = post("/orders", BODY, "retry-1");
+        HttpResponse<String> again = post("/orders", BODY, "retry-1");
+        assertEquals(201, first.statusCode(), first.body());
+        assertEquals(200, again.statusCode(), again.body());
+        String id = jdbc.sql("SELECT id::text FROM orders").query(String.class).single();
+        assertTrue(again.body().contains(id), again.body());
+        assertEquals(1, count("outbox"));
+        assertEquals(201, post("/orders", BODY).statusCode()); // no key: a new order every time
+        assertEquals(201, post("/orders", BODY).statusCode());
+        assertEquals(3, count("orders"));
+    }
+
+    @Test
+    void aKeyReusedForADifferentOrderIsRefused() throws Exception {
+        assertEquals(201, post("/orders", BODY, "k-2").statusCode());
+        HttpResponse<String> res = post("/orders", BODY.replace("1999", "2999"), "k-2");
+        assertEquals(422, res.statusCode(), res.body());
+        assertEquals(1, count("orders"));
+        assertEquals(1, count("outbox"));
+    }
+
+    @Test
+    void malformedIdempotencyKeysAreRejected() throws Exception {
+        for (String key : List.of("", "has space", "x".repeat(65), "semi;colon")) {
+            assertEquals(400, post("/orders", BODY, key).statusCode(), "key [" + key + "]");
+        }
+        assertEquals(0, count("orders"));
+    }
+
+    @Test
+    void concurrentRetriesWithOneKeyCreateOneOrder() throws Exception {
+        List<OrderService.Result> results = new ArrayList<>();
+        try (ExecutorService pool = Executors.newFixedThreadPool(8)) {
+            List<Future<OrderService.Result>> futures = new ArrayList<>();
+            for (int i = 0; i < 20; i++) {
+                futures.add(pool.submit(() -> orders.create(VALID, "same-key")));
+            }
+            for (Future<OrderService.Result> f : futures) {
+                results.add(f.get());
+            }
+        }
+        assertEquals(1, results.stream().filter(OrderService.Result::created).count());
+        assertEquals(1, results.stream().map(r -> r.order().id()).distinct().count());
+        assertEquals(1, count("orders"));
+        assertEquals(1, count("outbox"));
+    }
+
+    @Test
+    void transactionsHaveATimeout() {
+        assertEquals(10, txManager.getDefaultTimeout());
     }
 
     @Test

@@ -1,4 +1,7 @@
 spring:
+  # Bounds every transaction, so a lock wait or a stuck query fails instead of hanging the request.
+  transaction:
+    default-timeout: 10s
   application:
     name: payment-service
   flyway:

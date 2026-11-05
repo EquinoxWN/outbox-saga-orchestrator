@@ -27,6 +27,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.IllegalTransactionStateException;
+import org.springframework.transaction.support.AbstractPlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import portfolio.outboxsaga.outbox.OutboxWriter;
 import portfolio.outboxsaga.testsupport.EmbeddedDatabases;
@@ -44,6 +45,7 @@ class PaymentServiceTest {
     @Autowired PaymentService payments;
     @Autowired OutboxWriter outbox;
     @Autowired TransactionTemplate tx;
+    @Autowired AbstractPlatformTransactionManager txManager;
 
     private final HttpClient http = HttpClient.newHttpClient();
 
@@ -151,6 +153,7 @@ class PaymentServiceTest {
     void invalidRequestsAreRejected() throws Exception {
         assertEquals(400, post("/payments", "{\"amountCents\":10}").statusCode());
         assertEquals(400, post("/payments", body(UUID.randomUUID(), 0)).statusCode());
+        assertEquals(400, post("/payments", body(UUID.randomUUID(), 100_000_001)).statusCode());
         assertEquals(400, post("/payments", "{\"orderId\":\"nope\",\"amountCents\":10}").statusCode());
         assertEquals(0, count("outbox"));
     }
@@ -158,5 +161,10 @@ class PaymentServiceTest {
     @Test
     void thePaymentServiceOwnsOnlyItsOwnDatabase() {
         assertOwnsOnly("payment_svc", "order_db", "inventory_db");
+    }
+
+    @Test
+    void transactionsHaveATimeout() {
+        assertEquals(10, txManager.getDefaultTimeout());
     }
 }

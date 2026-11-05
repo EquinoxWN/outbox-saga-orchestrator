@@ -27,6 +27,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.IllegalTransactionStateException;
+import org.springframework.transaction.support.AbstractPlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import portfolio.outboxsaga.outbox.OutboxWriter;
 import portfolio.outboxsaga.testsupport.EmbeddedDatabases;
@@ -44,6 +45,7 @@ class InventoryServiceTest {
     @Autowired InventoryService inventory;
     @Autowired OutboxWriter outbox;
     @Autowired TransactionTemplate tx;
+    @Autowired AbstractPlatformTransactionManager txManager;
 
     private final HttpClient http = HttpClient.newHttpClient();
 
@@ -162,5 +164,10 @@ class InventoryServiceTest {
     @Test
     void theInventoryServiceOwnsOnlyItsOwnDatabase() {
         assertOwnsOnly("inventory_svc", "order_db", "payment_db");
+    }
+
+    @Test
+    void transactionsHaveATimeout() {
+        assertEquals(10, txManager.getDefaultTimeout());
     }
 }
