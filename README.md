@@ -9,7 +9,7 @@ Part of my **Backend and API** list · Java (Spring Boot) · core project
 
 ## Proof it works
 
-22 tests across the three services against a real PostgreSQL 18 started from embedded binaries: the outbox row commits with the business row or not at all, duplicate messages are applied once, stock is never oversold, and each service can only reach its own database. Every resolved Maven dependency was checked against OSV.dev, with none vulnerable after this check's upgrade:
+29 tests across the three services against a real PostgreSQL 18 started from embedded binaries: the outbox row commits with the business row or not at all, duplicate messages are applied once, stock is never oversold, and each service can only reach its own database. Every resolved Maven dependency was checked against OSV.dev, with none vulnerable after this check's upgrade (the screenshot is from the M1 run with 22 tests, before the 2026-11-01 quality pass):
 
 ![mvn verify summary and the OSV dependency check](docs/proof/tests.jpg)
 
@@ -64,7 +64,7 @@ Language: **Java 21 (Spring Boot 4.1)**, one Maven module per service plus a sha
 | Path | What it is |
 |---|---|
 | `outbox/` | `OutboxWriter` (joins the caller's transaction, refuses to run without one) and the outbox table migration |
-| `order-service/` | Orders: `POST /orders`, `GET /orders/{id}` |
+| `order-service/` | Orders: `POST /orders` (optional `Idempotency-Key` header makes a retry return the first order), `GET /orders/{id}` |
 | `payment-service/` | Payments: authorize up to a limit, decline above it, idempotent per order |
 | `inventory-service/` | Stock reservations that can never oversell, idempotent per order |
 | `test-support/` | Real PostgreSQL from embedded binaries; `db/init.sql` creates one database and role per service |
@@ -76,7 +76,7 @@ Needs JDK 21+ and Maven. No Docker: tests start a real PostgreSQL 18 from embedd
 ```bash
 make setup   # build and install the modules
 make lint    # compile every module
-make test    # 22 tests: atomic outbox, idempotency, no overselling, database ownership
+make test    # 29 tests: atomic outbox, idempotency (including retried POST /orders), no overselling, database ownership
 ```
 
 Run one service against your own PostgreSQL (after running [`test-support/src/main/resources/db/init.sql`](test-support/src/main/resources/db/init.sql) as a superuser):
@@ -86,8 +86,13 @@ cd order-service
 SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/order_db \
 SPRING_DATASOURCE_USERNAME=order_svc SPRING_DATASOURCE_PASSWORD=... mvn spring-boot:run
 curl -X POST localhost:8081/orders -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: checkout-42' \
   -d '{"customerId":"c-1","sku":"SKU-1","quantity":2,"amountCents":1999}'
 ```
+
+Sending the same request again with the same `Idempotency-Key` returns `200` and the first order
+instead of creating a second one; the key with a different body returns `422`. Without the header
+every `POST` creates a new order. Every transaction has a 10 s limit (`spring.transaction.default-timeout`).
 
 ## Tests and results
 
@@ -103,13 +108,14 @@ Latest local run on real PostgreSQL 18.6 (full detail in [docs/results/m1.md](do
 | 40 concurrent reservations against 5 units | exactly 5 reserved, stock 0, never negative |
 | Each service role connecting to another service's database | refused (SQLSTATE 42501) |
 | Invalid or SQL-shaped input | 400, nothing stored |
-| Tests passed | order 8, payment 7, inventory 7 |
+| Retried `POST /orders` with one `Idempotency-Key` (also 20 concurrent) | 1 order, 1 event; same key with another body 422 |
+| Tests passed | order 13, payment 8, inventory 8 |
 
 ### Test map
 
 ```mermaid
 mindmap
-  root((22 tests pass))
+  root((29 tests pass))
     Atomic outbox
       crash before commit leaves nothing
       failed event write rolls back the change
@@ -122,6 +128,8 @@ mindmap
     Idempotency
       retried payment returns the first decision
       retried reservation takes stock once
+      retried order with one key stored once
+      every transaction times out after 10 s
     Ownership and input
       each role refused by other databases
       no superuser or BYPASSRLS
@@ -165,6 +173,7 @@ What this repo must show before it counts as done:
 - [ADR 0001: record architecture decisions](docs/adr/0001-record-architecture-decisions.md)
 - [ADR 0002: the outbox writer joins the caller's transaction](docs/adr/0002-outbox-joins-caller-transaction.md)
 - [M1 results](docs/results/m1.md)
+- [Quality check against the 10 rules (2026-11-01)](docs/quality/2026-11-01.md)
 
 ## Scope
 
