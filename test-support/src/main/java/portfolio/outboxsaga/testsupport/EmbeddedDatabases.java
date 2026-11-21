@@ -13,6 +13,7 @@ import java.sql.Statement;
 import java.util.HexFormat;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 import org.springframework.test.context.DynamicPropertyRegistry;
 
 /** One real PostgreSQL per test JVM, set up with db/init.sql: a database and a role per service. */
@@ -26,9 +27,15 @@ public final class EmbeddedDatabases {
     public static synchronized EmbeddedPostgres start() {
         if (postgres == null) {
             try {
-                postgres = EmbeddedPostgres.builder().start();
+                EmbeddedPostgres started = EmbeddedPostgres.builder().start();
+                try {
+                    init(started);
+                } catch (IOException | SQLException | RuntimeException e) {
+                    started.close(); // a half-initialised server must not be reused by the next test class
+                    throw e;
+                }
+                postgres = started;
                 Runtime.getRuntime().addShutdownHook(new Thread(EmbeddedDatabases::stop));
-                init();
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             } catch (SQLException e) {
@@ -63,7 +70,7 @@ public final class EmbeddedDatabases {
     }
 
     /** Runs db/init.sql as the superuser, with fresh random passwords. */
-    private static void init() throws IOException, SQLException {
+    private static void init(EmbeddedPostgres server) throws IOException, SQLException {
         String sql;
         try (InputStream in = EmbeddedDatabases.class.getResourceAsStream("/db/init.sql")) {
             sql = new String(in.readAllBytes(), StandardCharsets.UTF_8);
@@ -76,8 +83,8 @@ public final class EmbeddedDatabases {
             PASSWORDS.put(role + "_svc", password);
             sql = sql.replace("${" + role + "_password}", password);
         }
-        try (Connection c = postgres.getPostgresDatabase().getConnection(); Statement st = c.createStatement()) {
-            String code = sql.lines().filter(l -> !l.strip().startsWith("--")).reduce("", (x, y) -> x + "\n" + y);
+        try (Connection c = server.getPostgresDatabase().getConnection(); Statement st = c.createStatement()) {
+            String code = sql.lines().filter(l -> !l.strip().startsWith("--")).collect(Collectors.joining("\n"));
             for (String statement : code.split(";")) {
                 String body = statement.strip();
                 if (!body.isEmpty()) {
