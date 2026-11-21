@@ -16,3 +16,11 @@ CLAUDE.md
 # Local tool caches (kept inside the repo)
 .tmp/
 .m2/
+
+# Secrets never tracked
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.tfstate
